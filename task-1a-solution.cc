@@ -8,10 +8,7 @@
 
 using namespace dealii;
 
-const int         dim                = 2;
-const std::string grid_in_file_name  = "";
-const std::string grid_out_file_name = "";
-const std::string data_out_file_name = "";
+const int dim = 2;
 
 int
 main()
@@ -21,11 +18,11 @@ main()
   {
     // read mesh with GridIn
     GridIn<dim> grid_in(tria);
-    grid_in.read(grid_in_file_name);
+    grid_in.read("beam.msh");
   }
 
   {
-    std::ofstream output_1(grid_out_file_name);
+    std::ofstream output_1("task-1a-grid.vtk");
 
     // write mesh with GridOut in VTK format
     GridOut grid_out;
@@ -37,7 +34,7 @@ main()
     const auto &mapping = tria.get_reference_cells()[0]
                             .template get_default_linear_mapping<dim, dim>();
 
-    std::ofstream output_2(grid_out_file_name);
+    std::ofstream output_2("task-1a-data.vtk");
 
     // write mesh with DataOut in VTK format
     DataOut<dim> data_out;
