@@ -53,12 +53,7 @@ main()
 
     // write volume mesh with GridOut in VTK format -> validate material ids
     GridOut grid_out;
-
-    GridOutFlags::Vtk flags;
-    flags.output_cells         = true;
-    flags.output_faces         = false;
-    flags.output_only_relevant = false;
-    grid_out.set_flags(flags);
+    grid_out.set_flags(GridOutFlags::Vtk(true, false, false, true));
 
     grid_out.write_vtk(tria, output_1);
   }
@@ -69,10 +64,7 @@ main()
     GridOut grid_out;
 
     GridOutFlags::Vtk flags;
-    flags.output_cells         = false;
-    flags.output_faces         = true;
-    flags.output_only_relevant = false;
-    grid_out.set_flags(flags);
+    grid_out.set_flags(GridOutFlags::Vtk(false, true, false, true));
 
     grid_out.write_vtk(tria, output_1);
   }

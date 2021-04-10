@@ -30,16 +30,12 @@ main()
   }
 
   {
-    AssertDimension(tria.get_reference_cells().size(), 1);
-    const auto &mapping = tria.get_reference_cells()[0]
-                            .template get_default_linear_mapping<dim, dim>();
-
     std::ofstream output_2("task-1a-data.vtk");
 
     // write mesh with DataOut in VTK format
     DataOut<dim> data_out;
     data_out.attach_triangulation(tria);
-    data_out.build_patches(mapping);
+    data_out.build_patches();
     data_out.write_vtk(output_2);
   }
 }
