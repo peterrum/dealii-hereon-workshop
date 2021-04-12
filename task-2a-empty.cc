@@ -71,10 +71,7 @@ main()
   Vector<double>                       cell_rhs;
   std::vector<types::global_dof_index> local_dof_indices;
 
-  FEValues<dim> fe_values(mapping,
-                          fe,
-                          quad,
-                          update_values | update_gradients | update_JxW_values);
+  FEValues<dim> fe_values(mapping, fe, quad, update_default /*TODO*/);
 
   // loop over all cells
   for (const auto &cell : dof_handler.active_cell_iterators())
@@ -90,15 +87,10 @@ main()
         {
           for (const auto i : fe_values.dof_indices())
             for (const auto j : fe_values.dof_indices())
-              cell_matrix(i, j) +=
-                (fe_values.shape_grad(i, q) * // grad phi_i(x_q)
-                 fe_values.shape_grad(j, q) * // grad phi_j(x_q)
-                 fe_values.JxW(q));           // dx
+              cell_matrix(i, j) += 0.0; // TODO
 
           for (const unsigned int i : fe_values.dof_indices())
-            cell_rhs(i) += (fe_values.shape_value(i, q) * // phi_i(x_q)
-                            1. *                          // f(x_q)
-                            fe_values.JxW(q));            // dx
+            cell_rhs(i) += 0.0; // TODO
         }
 
       local_dof_indices.resize(cell->get_fe().dofs_per_cell);

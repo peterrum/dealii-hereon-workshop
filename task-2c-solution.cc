@@ -222,7 +222,7 @@ main(int argc, char **argv)
             for (const unsigned int i : fe_face_values.dof_indices())
               cell_rhs(i) += (fe_face_values.shape_value(i, q) * // phi_i(x_q)
                               1. *                               // f(x_q)
-                              fe_values.JxW(q));                 // dx
+                              fe_face_values.JxW(q));            // dx
         }
 
       local_dof_indices.resize(cell->get_fe().dofs_per_cell);
