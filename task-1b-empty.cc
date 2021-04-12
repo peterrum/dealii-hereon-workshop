@@ -6,6 +6,8 @@
 
 #include <deal.II/numerics/data_out.h>
 
+#include <fstream>
+
 using namespace dealii;
 
 const int dim = 2;

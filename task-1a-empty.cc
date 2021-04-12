@@ -2,6 +2,8 @@
 
 // TODO: include the right files
 
+#include <fstream>
+
 using namespace dealii;
 
 const int dim = 2;
