@@ -124,11 +124,12 @@ main()
   constraints.distribute(x);
 
   // output results
+  DataOut<dim> data_out;
+#if false
   DataOutBase::VtkFlags flags;
   flags.write_higher_order_cells = true;
-
-  DataOut<dim> data_out;
   data_out.set_flags(flags);
+#endif
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(dof_handler, x, "solution");
   data_out.build_patches(mapping, degree + 1);

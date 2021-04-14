@@ -249,11 +249,13 @@ main(int argc, char **argv)
   constraints.distribute(x);
 
   // output results
-  DataOutBase::VtkFlags flags;
-  flags.write_higher_order_cells = true;
 
   DataOut<dim> data_out;
+#if false
+  DataOutBase::VtkFlags flags;
+  flags.write_higher_order_cells = true;
   data_out.set_flags(flags);
+#endif
   data_out.attach_dof_handler(dof_handler);
   x.update_ghost_values();
   data_out.add_data_vector(dof_handler, x, "solution");
