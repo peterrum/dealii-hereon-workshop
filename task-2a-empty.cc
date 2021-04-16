@@ -87,6 +87,8 @@ main()
       // loop over cell dofs
       for (const auto q : fe_values.quadrature_point_indices())
         {
+          (void)q;
+
           for (const auto i : fe_values.dof_indices())
             for (const auto j : fe_values.dof_indices())
               cell_matrix(i, j) += 0.0; // TODO
