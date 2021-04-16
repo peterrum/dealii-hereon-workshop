@@ -13,22 +13,21 @@
 //
 // ---------------------------------------------------------------------
 
-#include <deal.II/distributed/tria.h>
-
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/fe_system.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/tria.h>
 
-#include <deal.II/lac/la_parallel_vector.h>
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/la_vector.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
-#include <deal.II/lac/trilinos_sparse_matrix.h>
-#include <deal.II/lac/trilinos_sparsity_pattern.h>
+#include <deal.II/lac/sparse_matrix.h>
+#include <deal.II/lac/sparsity_pattern.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -37,141 +36,44 @@
 
 using namespace dealii;
 
-namespace util
-{
-  /**
-   * Extract communicator of @p mesh.
-   */
-  template <typename MeshType>
-  MPI_Comm
-  get_mpi_comm(const MeshType &mesh)
-  {
-    const auto *tria_parallel = dynamic_cast<
-      const parallel::TriangulationBase<MeshType::dimension,
-                                        MeshType::space_dimension> *>(
-      &(mesh.get_triangulation()));
-
-    return tria_parallel != nullptr ? tria_parallel->get_communicator() :
-                                      MPI_COMM_SELF;
-  }
-
-  /**
-   * Create a deal.II partitioner.
-   */
-  template <int dim, int spacedim>
-  std::shared_ptr<const Utilities::MPI::Partitioner>
-  create_dealii_partitioner(
-    const DoFHandler<dim, spacedim> &dof_handler,
-    unsigned int                     mg_level = numbers::invalid_unsigned_int)
-  {
-    IndexSet locally_relevant_dofs;
-
-    if (mg_level == numbers::invalid_unsigned_int)
-      DoFTools::extract_locally_relevant_dofs(dof_handler,
-                                              locally_relevant_dofs);
-    else
-      DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                    mg_level,
-                                                    locally_relevant_dofs);
-
-    return std::make_shared<const Utilities::MPI::Partitioner>(
-      mg_level == numbers::invalid_unsigned_int ?
-        dof_handler.locally_owned_dofs() :
-        dof_handler.locally_owned_mg_dofs(mg_level),
-      locally_relevant_dofs,
-      get_mpi_comm(dof_handler));
-  }
-
-  /**
-   * Initialize dof vector @p vec.
-   */
-  template <int dim, typename Number>
-  void
-  initialize_dof_vector(const DoFHandler<dim> &                     dof_handler,
-                        LinearAlgebra::distributed::Vector<Number> &vec)
-  {
-    const auto partitioner_dealii = create_dealii_partitioner(dof_handler);
-    vec.reinit(partitioner_dealii);
-  }
-
-  /**
-   * Initialize dof vector @p vec.
-   */
-  template <int dim>
-  void
-  initialize_system_matrix(const DoFHandler<dim> &          dof_handler,
-                           const AffineConstraints<double> &constraints,
-                           TrilinosWrappers::SparseMatrix & system_matrix)
-  {
-    TrilinosWrappers::SparsityPattern dsp(dof_handler.locally_owned_dofs(),
-                                          get_mpi_comm(dof_handler));
-    DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints, false);
-    dsp.compress();
-
-    system_matrix.reinit(dsp);
-  }
-
-  template <int dim, int spacedim>
-  void
-  create_reentrant_corner(Triangulation<dim, spacedim> &tria)
-  {
-    const unsigned int n_refinements = 1;
-
-    std::vector<unsigned int> repetitions(dim, 2);
-    Point<dim>                bottom_left, top_right;
-    for (unsigned int d = 0; d < dim; ++d)
-      {
-        bottom_left[d] = -1.;
-        top_right[d]   = 1.;
-      }
-    std::vector<int> cells_to_remove(dim, 1);
-    cells_to_remove[0] = -1;
-
-    GridGenerator::subdivided_hyper_L(
-      tria, repetitions, bottom_left, top_right, cells_to_remove);
-
-    tria.refine_global(n_refinements);
-  }
-
-} // namespace util
-
-
 int
-main(int argc, char **argv)
+main()
 {
-  Utilities::MPI::MPI_InitFinalize mpi(argc, argv, 1);
+  const unsigned int dim = 2, degree = 3, n_global_refinements = 3;
 
-  const unsigned int dim                  = 2; // only 2D is working for now
-  const unsigned int degree               = 3;
-  const unsigned int n_global_refinements = 3;
-
-  // create mesh, select relevant FEM ingredients, and set up DoFHandler
-  parallel::distributed::Triangulation<dim> tria(MPI_COMM_WORLD);
+  Triangulation<dim> tria;
   GridGenerator::hyper_cube(tria, 0, 1, true);
   tria.refine_global(n_global_refinements);
 
-  FE_Q<dim>            fe(degree);
-  QGauss<dim>          quad(degree + 1);
-  QGauss<dim - 1>      quad_face(degree + 1);
-  MappingQGeneric<dim> mapping(1);
+  FE_Q<dim>       fe(degree);
+  QGauss<dim>     quad(degree + 1);
+  QGauss<dim - 1> quad_face(degree + 1);
+  MappingQ1<dim>  mapping;
 
   DoFHandler<dim> dof_handler(tria);
   dof_handler.distribute_dofs(fe);
 
-  // Create constraint matrix
+  // deal with boundary conditions
   AffineConstraints<double> constraints;
   VectorTools::interpolate_boundary_values(
     mapping, dof_handler, 0, Functions::ZeroFunction<dim>(), constraints);
   constraints.close();
 
   // initialize vectors and system matrix
-  LinearAlgebra::distributed::Vector<double> x, b;
-  TrilinosWrappers::SparseMatrix             A;
-  util::initialize_dof_vector(dof_handler, x);
-  util::initialize_dof_vector(dof_handler, b);
-  util::initialize_system_matrix(dof_handler, constraints, A);
+  Vector<double>       x(dof_handler.n_dofs()), b(dof_handler.n_dofs());
+  SparseMatrix<double> A;
+  SparsityPattern      sparsity_pattern;
+
+  DynamicSparsityPattern dsp(dof_handler.n_dofs());
+  DoFTools::make_sparsity_pattern(dof_handler, dsp);
+  sparsity_pattern.copy_from(dsp);
+  A.reinit(sparsity_pattern);
 
   // assemble right-hand side and system matrix
+  FullMatrix<double>                   cell_matrix;
+  Vector<double>                       cell_rhs;
+  std::vector<types::global_dof_index> local_dof_indices;
+
   FEValues<dim>     fe_values(mapping,
                           fe,
                           quad,
@@ -181,16 +83,9 @@ main(int argc, char **argv)
                                    quad_face,
                                    update_values | update_JxW_values);
 
-  FullMatrix<double>                   cell_matrix;
-  Vector<double>                       cell_rhs;
-  std::vector<types::global_dof_index> local_dof_indices;
-
   // loop over all cells
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
-      if (cell->is_locally_owned() == false)
-        continue;
-
       fe_values.reinit(cell);
 
       const unsigned int dofs_per_cell = cell->get_fe().dofs_per_cell;
@@ -234,22 +129,16 @@ main(int argc, char **argv)
         cell_matrix, cell_rhs, local_dof_indices, A, b);
     }
 
-  b.compress(VectorOperation::values::add);
-  A.compress(VectorOperation::values::add);
-
   // solve linear equation system
-  ReductionControl reduction_control(100, 1e-10, 1e-4);
-  SolverCG<LinearAlgebra::distributed::Vector<double>> solver(
-    reduction_control);
+  ReductionControl         reduction_control(100, 1e-10, 1e-4);
+  SolverCG<Vector<double>> solver(reduction_control);
   solver.solve(A, x, b, PreconditionIdentity());
 
-  if (Utilities::MPI::this_mpi_process(util::get_mpi_comm(tria)) == 0)
-    printf("Solved in %d iterations.\n", reduction_control.last_step());
+  printf("Solved in %d iterations.\n", reduction_control.last_step());
 
   constraints.distribute(x);
 
   // output results
-
   DataOut<dim> data_out;
 #if false
   DataOutBase::VtkFlags flags;
@@ -257,11 +146,9 @@ main(int argc, char **argv)
   data_out.set_flags(flags);
 #endif
   data_out.attach_dof_handler(dof_handler);
-  x.update_ghost_values();
   data_out.add_data_vector(dof_handler, x, "solution");
   data_out.build_patches(mapping, degree + 1);
-  data_out.write_vtu_with_pvtu_record("./",
-                                      "result",
-                                      0,
-                                      util::get_mpi_comm(tria));
+
+  std::ofstream output("solution.vtu");
+  data_out.write_vtu(output);
 }
