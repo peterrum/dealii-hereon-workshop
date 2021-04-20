@@ -102,34 +102,20 @@ main()
   AffineConstraints<double> constraints;
 
   // ... fill constraint matrix
-  VectorTools::interpolate_boundary_values(
-    dof_handler,
-    0, // left face
-    Functions::ConstantFunction<dim>(std::vector<double>{0.0, 0.0}),
-    constraints,
-    ComponentMask(std::vector<bool>{true, false}));
-
-  VectorTools::interpolate_boundary_values(
-    dof_handler,
-    2, // bottom face
-    Functions::ConstantFunction<dim>(std::vector<double>{0.0, 0.0}),
-    constraints,
-    ComponentMask(std::vector<bool>{false, true}));
+  VectorTools::interpolate_boundary_values(dof_handler,
+                                           0, // left face
+                                           Functions::ConstantFunction<dim>(
+                                             std::vector<double>{0.0, 0.0}),
+                                           constraints);
 
   // compute traction
   Tensor<1, dim> traction;
-  traction[0] = +1e9; // x-direction
-  traction[1] = +0e9; // y-direction
+  traction[0] = +0e9; // x-direction
+  traction[1] = -1e9; // y-direction
 
   // compute stress strain tensor
-  const auto stress_strain_tensor_1 =
+  const auto stress_strain_tensor =
     get_stress_strain_tensor<dim>(9.695e10, 7.617e10);
-
-  const auto stress_strain_tensor_2 =
-    get_stress_strain_tensor<dim>(10 * 9.695e10, 7.617e10);
-
-  for (const auto &cell : tria.active_cell_iterators())
-    cell->set_material_id(cell->center()[0] > 0.5);
 
   // ... finalize constraint matrix
   constraints.close();
@@ -180,12 +166,11 @@ main()
               const auto eps_phi_i = get_strain(fe_values, i, q);
               const auto eps_phi_j = get_strain(fe_values, j, q);
 
-              cell_matrix(i, j) +=
-                (eps_phi_i *
-                 (cell->material_id() == 1 ? stress_strain_tensor_1 :
-                                             stress_strain_tensor_2) *
-                 eps_phi_j) *
-                fe_values.JxW(q);
+              cell_matrix(i, j) += (eps_phi_i *            //
+                                    stress_strain_tensor * //
+                                    eps_phi_j              //
+                                    ) *                    //
+                                   fe_values.JxW(q);       //
             }
 
       // loop over all cell faces and their dofs
