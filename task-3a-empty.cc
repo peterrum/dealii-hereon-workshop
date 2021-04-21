@@ -36,6 +36,8 @@
 
 using namespace dealii;
 
+#define V 1
+
 /**
  * Return stress-strain tensor.
  */
@@ -145,6 +147,20 @@ main()
   FullMatrix<double>                   cell_matrix;
   Vector<double>                       cell_rhs;
   std::vector<types::global_dof_index> local_dof_indices;
+  
+#if V == 1
+  for (const auto &cell : dof_handler.active_cell_iterators())
+  for (const auto vertex : cell->vertex_indices ())
+  {
+      if(cell->vertex(vertex).distance(Point<dim>(1, 0.2)) > 1e-6)
+          continue;
+      
+    for (unsigned int component=0; component<fe.n_components(); ++component)
+      b[cell->vertex_dof_index(vertex,component)] = traction[component]*0.2;
+  }      
+  
+  b.print(std::cout);
+#endif
 
   // loop over all cells
   for (const auto &cell : dof_handler.active_cell_iterators())
@@ -173,6 +189,7 @@ main()
                                    fe_values.JxW(q);       //
             }
 
+#if V == 0
       // loop over all cell faces and their dofs
       for (const auto &face : cell->face_iterators())
         {
@@ -188,7 +205,7 @@ main()
                              traction[fe.system_to_component_index(i).first] *
                              fe_face_values.JxW(q);
         }
-
+#endif
 
       local_dof_indices.resize(cell->get_fe().dofs_per_cell);
       cell->get_dof_indices(local_dof_indices);
@@ -196,7 +213,7 @@ main()
       constraints.distribute_local_to_global(
         cell_matrix, cell_rhs, local_dof_indices, A, b);
     }
-
+  
   // solve linear equation system
   ReductionControl         reduction_control;
   SolverCG<Vector<double>> solver(reduction_control);
@@ -205,6 +222,8 @@ main()
   printf("Solved in %d iterations.\n", reduction_control.last_step());
 
   constraints.distribute(x);
+  
+  std::cout << x.linfty_norm() << std::endl;
 
   // output results
   DataOut<dim> data_out;
